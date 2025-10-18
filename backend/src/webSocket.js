@@ -1,6 +1,8 @@
 // src/webSocket.js
 import { generateTelemetry } from "./simulator.js";
 import { getClusterState, simulateLoadSpike } from "./stateMachine.js";
+import { appendLog } from "./utils/logger.js";
+
 
 // 📊 Summarize live telemetry into dashboard metrics
 function calculateDashboardMetrics(clusters) {
@@ -37,17 +39,23 @@ export function startTelemetry(wss) {
   wss.on("connection", (ws) => {
     console.log("✅ Client connected");
 
-    // send telemetry every 2 seconds
+    // Telemetry every 2s
     setInterval(() => {
       const allTelemetry = generateTelemetry(32);
       ws.send(JSON.stringify({ type: "telemetry", data: allTelemetry }));
+
+      // Log telemetry
+      appendLog("telemetry", allTelemetry);
     }, 2000);
 
-    // send dashboard metrics every 10 seconds
+    // Dashboard every 1 minute
     setInterval(() => {
       const allTelemetry = generateTelemetry(32);
       const dashboardData = calculateDashboardMetrics(allTelemetry);
       ws.send(JSON.stringify({ type: "dashboard", data: dashboardData }));
+
+      // Log dashboard snapshot
+      appendLog("dashboard", dashboardData);
     }, 60000);
 
     ws.on("message", (msg) => {
