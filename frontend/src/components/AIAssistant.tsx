@@ -2,31 +2,36 @@
 import { useState, useRef, useEffect } from 'react';
 
 type AIAssistantProps = {
-  ws: WebSocket | null;
+  wsRef: import('react').RefObject<WebSocket | null>;
   connectionStatus: string;
 };
 
-export function AIAssistant({ ws, connectionStatus }: AIAssistantProps) {
+export function AIAssistant({ wsRef, connectionStatus }: AIAssistantProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [response, setResponse] = useState<string>('');
   const [isPlaying, setIsPlaying] = useState(false);
   const [question, setQuestion] = useState('');
+  const [isMuted, setIsMuted] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
+    // Re-run this effect when the connection status changes so we always attach to the current socket
+    const ws = wsRef?.current;
     if (!ws) return;
+
+    let onOpen: ((ev: Event) => void) | null = null;
 
     const handleMessage = (event: MessageEvent) => {
       try {
         const msg = JSON.parse(event.data);
-        
+
         if (msg.type === 'ai_response' || msg.type === 'ai_answer') {
           setResponse(msg.text || msg.answer);
           setIsAnalyzing(false);
-          
-          // Play audio if available
-          if (msg.audio && audioRef.current) {
+
+          // Play audio only if not muted
+          if (msg.audio && audioRef.current && !isMuted) {
             const audioBlob = base64ToBlob(msg.audio, 'audio/mpeg');
             const audioUrl = URL.createObjectURL(audioBlob);
             audioRef.current.src = audioUrl;
@@ -34,11 +39,16 @@ export function AIAssistant({ ws, connectionStatus }: AIAssistantProps) {
             setIsPlaying(true);
           }
         }
-        
+
         if (msg.type === 'ai_error') {
-          setResponse('❌ Error: ' + msg.error);
+          setResponse('\u274c Error: ' + msg.error);
           setIsAnalyzing(false);
           setIsPlaying(false);
+        }
+
+        // handle mute state from backend
+        if (msg.type === 'mute-state') {
+          setIsMuted(msg.muted);
         }
       } catch (e) {
         console.error('Failed to parse AI message:', e);
@@ -46,8 +56,30 @@ export function AIAssistant({ ws, connectionStatus }: AIAssistantProps) {
     };
 
     ws.addEventListener('message', handleMessage);
-    return () => ws.removeEventListener('message', handleMessage);
-  }, [ws]);
+
+    // Request initial mute state when connected
+    try {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'get-mute-state' }));
+      }
+    } catch (e) {
+      console.error('Failed to request mute state', e);
+    }
+
+    return () => {
+      ws.removeEventListener('message', handleMessage);
+      if (onOpen) ws.removeEventListener('open', onOpen as EventListener);
+    };
+  }, [connectionStatus, wsRef, isMuted]);
+
+  // Pause audio if muted changes while audio is playing
+  useEffect(() => {
+    if (isMuted && audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsPlaying(false);
+    }
+  }, [isMuted]);
 
   const base64ToBlob = (base64: string, mimeType: string): Blob => {
     const byteCharacters = atob(base64);
@@ -60,26 +92,38 @@ export function AIAssistant({ ws, connectionStatus }: AIAssistantProps) {
   };
 
   const analyzeNow = () => {
+    const ws = wsRef?.current;
     if (!ws || connectionStatus !== 'connected') return;
-    
+
     setIsAnalyzing(true);
     setResponse('');
-    ws.send(JSON.stringify({ 
-      type: 'ask_ai',
-      withAudio: true // Enable TTS
-    }));
+    try {
+      ws.send(JSON.stringify({ 
+        type: 'ask_ai',
+        withAudio: true // Enable TTS
+      }));
+    } catch (e) {
+      console.error('Failed to send ask_ai:', e);
+      setIsAnalyzing(false);
+    }
   };
 
   const askAI = () => {
+    const ws = wsRef?.current;
     if (!ws || connectionStatus !== 'connected' || !question.trim()) return;
-    
+
     setIsAnalyzing(true);
     setResponse('');
-    ws.send(JSON.stringify({ 
-      type: 'ask_question',
-      question: question.trim(),
-      withAudio: true
-    }));
+    try {
+      ws.send(JSON.stringify({ 
+        type: 'ask_question',
+        question: question.trim(),
+        withAudio: true
+      }));
+    } catch (e) {
+      console.error('Failed to send ask_question:', e);
+      setIsAnalyzing(false);
+    }
     setQuestion('');
   };
 
@@ -122,10 +166,80 @@ export function AIAssistant({ ws, connectionStatus }: AIAssistantProps) {
                   Speaking
                 </div>
               )}
+              <button
+                onClick={() => {
+                  try {
+                    // Optimistically update UI immediately
+                    const willUnmute = isMuted;
+                    setIsMuted(!isMuted);
+
+                    // Stop audio locally when muting
+                    if (!willUnmute && audioRef.current) {
+                      audioRef.current.pause();
+                      audioRef.current.currentTime = 0;
+                      setIsPlaying(false);
+                    }
+
+                    const ws = wsRef?.current;
+                    if (!ws) {
+                      console.warn('Cannot mute/unmute: WebSocket not available');
+                      return;
+                    }
+
+                    if (ws.readyState !== WebSocket.OPEN) {
+                      console.warn('Cannot mute/unmute: WebSocket not open (state=' + ws.readyState + ')');
+                      return;
+                    }
+
+                    ws.send(JSON.stringify({ type: willUnmute ? 'unmute' : 'mute' }));
+                  } catch (e) {
+                    console.error('Failed to send mute/unmute:', e);
+                  }
+                }}
+                className={`ml-2 px-2 py-1 rounded text-xs font-semibold border transition
+                  ${isMuted
+                    ? 'border-red-400 text-red-400 hover:bg-red-400/10'
+                    : 'border-cyan-400 text-cyan-400 hover:bg-cyan-400/10'
+                  }`}
+              >
+                {isMuted ? '🔇 Unmute' : '🔊 Mute'}
+              </button>
             </div>
           </div>
 
+
           <div className="p-4 max-h-[400px] overflow-y-auto">
+            {/* Muted banner */}
+            {isMuted && (
+              <div className="mb-3 p-3 rounded bg-red-700/20 border border-red-600/30 flex items-center gap-3">
+                <div className="text-2xl">🎙️�</div>
+                <div className="flex-1 text-sm text-red-100">Assistant is muted — audio disabled. Click Unmute to enable voice responses.</div>
+                <button
+                  onClick={() => {
+                    try {
+                      const ws = wsRef?.current;
+                      if (!ws || ws.readyState !== WebSocket.OPEN) {
+                        console.warn('Cannot unmute: socket not open');
+                        return;
+                      }
+                      ws.send(JSON.stringify({ type: 'unmute' }));
+                      // stop any current audio playback
+                      if (audioRef.current) {
+                        audioRef.current.pause();
+                        audioRef.current.currentTime = 0;
+                      }
+                      // Optimistically update UI
+                      setIsMuted(false);
+                    } catch (e) {
+                      console.error('Failed to send unmute', e);
+                    }
+                  }}
+                  className="px-3 py-1 rounded bg-red-600/40 text-sm font-semibold hover:bg-red-600/60"
+                >
+                  Unmute
+                </button>
+              </div>
+            )}
             {/* Quick Analysis Button */}
             <button
               onClick={analyzeNow}

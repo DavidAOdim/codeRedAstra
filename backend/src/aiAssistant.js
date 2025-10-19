@@ -1,3 +1,19 @@
+let isMuted = false; // 🔇 global mute state
+
+export function muteAssistant() {
+  isMuted = true;
+  console.log("🔇 AI Assistant muted");
+}
+
+export function unmuteAssistant() {
+  isMuted = false;
+  console.log("🔊 AI Assistant unmuted");
+}
+
+export function getMuteState() {
+  return isMuted;
+}
+
 // backend/src/aiAssistant.js
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
@@ -60,6 +76,11 @@ Keep response under 150 words. Be technical but clear. Focus on what matters mos
  * @returns {Promise<Buffer>} - Audio buffer
  */
 export async function textToSpeech(text) {
+  if (isMuted) {
+    console.log("🔇 Skipping ElevenLabs TTS — Assistant is muted.");
+    return null;
+  }
+  
   if (!process.env.ELEVENLABS_API_KEY) {
     throw new Error('ELEVENLABS_API_KEY not configured');
   }

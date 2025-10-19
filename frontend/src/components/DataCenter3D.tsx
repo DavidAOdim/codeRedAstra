@@ -21,8 +21,6 @@ type ClusterData = {
   power: number;
 };
 
-type VisualizationMode = 'airflow' | 'thermal' | 'power';
-
 interface DataCenter3DProps {
   cluster: ClusterData;
   onClose: () => void;
@@ -171,16 +169,16 @@ function ServerRoom() {
       {/* CRAC Unit (Computer Room Air Conditioning) on right wall */}
       <group position={[5.8, 1.5, -2]}>
         <mesh>
-          <boxGeometry args={[0.3, 1.5, 1.5]} />
+          <boxGeometry args={[0.2, 0.8, 0.8]} />
           <meshStandardMaterial color="#2a2a3e" metalness={0.6} roughness={0.4} />
         </mesh>
-        <Text position={[0.16, 0, 0]} fontSize={0.1} color="#00ff00" rotation={[0, -Math.PI / 2, 0]}>
+        <Text position={[0.11, 0, 0]} fontSize={0.06} color="#00aa00" rotation={[0, -Math.PI / 2, 0]}>
           CRAC
         </Text>
         {/* Status LED */}
-        <mesh position={[0.16, 0.6, 0]}>
-          <sphereGeometry args={[0.03, 16, 16]} />
-          <meshStandardMaterial color="#00ff00" emissive="#00ff00" emissiveIntensity={2} />
+        <mesh position={[0.11, 0.3, 0]}>
+          <sphereGeometry args={[0.02, 16, 16]} />
+          <meshStandardMaterial color="#00aa00" emissive="#00aa00" emissiveIntensity={1} />
         </mesh>
       </group>
       
@@ -768,7 +766,7 @@ function RearExhaustAirflow({ nodes, cooling }: { nodes: NodeData[]; cooling: nu
 // (Removed) TemperatureSensors UI
 
 // Main server rack assembly
-function ServerRack({ cluster, vizMode }: { cluster: ClusterData; vizMode: VisualizationMode }) {
+function ServerRack({ cluster }: { cluster: ClusterData }) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [doorOpen, setDoorOpen] = useState(false);
 
@@ -778,19 +776,20 @@ function ServerRack({ cluster, vizMode }: { cluster: ClusterData; vizMode: Visua
     return () => clearTimeout(timer);
   }, []);
 
-  // Always render 8 slots; fill missing with placeholder GPU servers
+  // Always render 8 slots; fill with real nodes or placeholders
   const slots = useMemo(() => {
     return Array.from({ length: 8 }, (_, i) => {
-      const n = cluster.nodes[i];
-      if (n) return n;
-      // Create placeholder node with simple naming like "Node A8"
+      const realNode = cluster.nodes[i];
+      if (realNode) return realNode;
+      
+      // Placeholder for visual consistency - still clickable
       const nodeLabel = `Node ${i + 1}`;
       return {
         id: nodeLabel,
-        gpu: 8,
-        temp: 32,
-        cooling: cluster.cooling,
-        power: Math.max(50, Math.floor(cluster.power / 10)),
+        gpu: 0,
+        temp: 20,
+        cooling: 0,
+        power: 0,
         status: 'idle' as const,
       } as NodeData;
     });
@@ -818,13 +817,9 @@ function ServerRack({ cluster, vizMode }: { cluster: ClusterData; vizMode: Visua
         />
       ))}
 
-      {/* Airflow visualizations */}
-      {vizMode === 'airflow' && (
-        <>
-          <FrontIntakeAirflow cooling={cluster.cooling} />
-          <RearExhaustAirflow nodes={cluster.nodes} cooling={cluster.cooling} />
-        </>
-      )}
+      {/* Airflow visualizations - always shown */}
+      <FrontIntakeAirflow cooling={cluster.cooling} />
+      <RearExhaustAirflow nodes={cluster.nodes} cooling={cluster.cooling} />
 
       {/* Cluster name and status - raised to avoid clipping with rack */}
       <Text
@@ -896,9 +891,10 @@ function ServerRack({ cluster, vizMode }: { cluster: ClusterData; vizMode: Visua
 
 // Main 3D scene
 export function DataCenter3D({ cluster, onClose }: DataCenter3DProps) {
-  const [vizMode, setVizMode] = useState<VisualizationMode>('airflow');
-  
-  const avgTemp = cluster.nodes.reduce((sum, n) => sum + n.temp, 0) / cluster.nodes.length;
+  // Calculate average temperature safely, handling empty arrays and invalid values
+  const avgTemp = cluster.nodes.length > 0 
+    ? cluster.nodes.reduce((sum, n) => sum + (n.temp || 0), 0) / cluster.nodes.length 
+    : 0;
   
   return (
     <div style={{ width: '100%', height: '100vh', background: '#000000' }}>
@@ -923,40 +919,6 @@ export function DataCenter3D({ cluster, onClose }: DataCenter3DProps) {
       >
         ← BACK TO DASHBOARD
       </button>
-
-      {/* Visualization mode selector */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '20px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 1000,
-          display: 'flex',
-          gap: '10px',
-        }}
-      >
-        {(['airflow', 'thermal', 'power'] as VisualizationMode[]).map((mode) => (
-          <button
-            key={mode}
-            onClick={() => setVizMode(mode)}
-            style={{
-              padding: '10px 20px',
-              background: vizMode === mode ? 'rgba(0, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.6)',
-              border: vizMode === mode ? '2px solid #00ffff' : '1px solid #666666',
-              color: vizMode === mode ? '#00ffff' : '#aaaaaa',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: 'bold',
-              borderRadius: '4px',
-              backdropFilter: 'blur(10px)',
-              textTransform: 'uppercase',
-            }}
-          >
-            {mode === 'airflow' && '💨'} {mode === 'thermal' && '🌡️'} {mode === 'power' && '⚡'} {mode}
-          </button>
-        ))}
-      </div>
 
       {/* Info panel */}
       <div
@@ -1004,23 +966,20 @@ export function DataCenter3D({ cluster, onClose }: DataCenter3DProps) {
             • <strong>Left drag:</strong> Rotate camera<br />
             • <strong>Right drag:</strong> Pan view<br />
             • <strong>Scroll:</strong> Zoom in/out<br />
-            • <strong>Click node:</strong> View details<br />
-            • <strong>Mode buttons:</strong> Change visualization
+            • <strong>Click node:</strong> View details
           </div>
         </div>
         
-        {vizMode === 'airflow' && (
-          <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #333333' }}>
-            <div style={{ fontSize: '12px', color: '#aaaaaa', marginBottom: '8px' }}>
-              <strong style={{ color: '#00ffff' }}>💨 Airflow Mode:</strong>
-            </div>
-            <div style={{ fontSize: '11px', color: '#888888', lineHeight: '1.6' }}>
-              • <span style={{ color: '#00aaff' }}>■</span> Blue particles = Cold intake (front)<br />
-              • <span style={{ color: '#ff6600' }}>■</span> Orange particles = Hot exhaust (rear)<br />
-              • Particle speed = Cooling intensity
-            </div>
+        <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #333333' }}>
+          <div style={{ fontSize: '12px', color: '#aaaaaa', marginBottom: '8px' }}>
+            <strong style={{ color: '#00ffff' }}>💨 Airflow Visualization:</strong>
           </div>
-        )}
+          <div style={{ fontSize: '11px', color: '#888888', lineHeight: '1.6' }}>
+            • <span style={{ color: '#00aaff' }}>■</span> Blue particles = Cold intake (front)<br />
+            • <span style={{ color: '#ff6600' }}>■</span> Orange particles = Hot exhaust (rear)<br />
+            • Particle speed = Cooling intensity
+          </div>
+        </div>
       </div>
 
       <Canvas shadows>
@@ -1061,7 +1020,7 @@ export function DataCenter3D({ cluster, onClose }: DataCenter3DProps) {
         <DataCenterFloor />
         
         {/* Server rack */}
-        <ServerRack cluster={cluster} vizMode={vizMode} />
+        <ServerRack cluster={cluster} />
         
         {/* Fog for depth */}
         <fog attach="fog" args={['#000000', 8, 20]} />

@@ -61,7 +61,13 @@ function generateCluster(clusterName, clusterIndex) {
     nodeCooling = Math.min(100, Math.max(0, nodeCooling));
     
     const temperature = 20 + gpuLoad * 0.2 + (Math.random() * 4 - 2);
-    const powerUsage = Math.round((gpuLoad * 1.5 + nodeCooling * 0.8) / 10);
+    
+    // More realistic power calculation (servers have base power + load power)
+    // Base power: ~1.5 kW idle, scales up to ~6 kW at full load
+    const basePower = 1.5; // kW - idle power consumption
+    const loadPower = (gpuLoad / 100) * 4.5; // kW - additional power from GPU load
+    const coolingPower = (nodeCooling / 100) * 0.8; // kW - cooling fans power
+    const powerUsage = parseFloat((basePower + loadPower + coolingPower).toFixed(2));
     
     // 2% chance any individual node is offline
     const status = Math.random() < 0.02 ? "offline" : "online";

@@ -210,7 +210,7 @@ function GPUGrid({ nodes }: { nodes: { id: number; label: string; clusterName: s
 
 function ClusterList({ clusters, onClusterClick }: { clusters: Cluster[]; onClusterClick: (cluster: Cluster) => void }) {
   return (
-    <div className="flex-1 overflow-y-auto pr-1.5 space-y-3">
+    <div className="flex-1 overflow-y-auto pr-1.5 space-y-3 pb-2">
       {clusters.map((cluster) => {
         const gpuLoad = Math.round(cluster.gpu);
         const cooling = Math.round(cluster.cooling);
@@ -313,7 +313,7 @@ function ClusterList({ clusters, onClusterClick }: { clusters: Cluster[]; onClus
 
 function App() {
   const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080';
-  const { telemetry, status, ws } = useTelemetry(WS_URL);
+  const { telemetry, status, wsRef } = useTelemetry(WS_URL);
   const { data, options } = useChartData(telemetry?.chart);
   const [selected3DClusterName, setSelected3DClusterName] = useState<string | null>(null);
 
@@ -322,8 +322,11 @@ function App() {
     const cluster = telemetry?.clusters.find(c => c.name === clusterName);
     if (!cluster) return null;
 
+    // Extract the letter from "Cluster A" -> "A"
+    const clusterLetter = clusterName.replace('Cluster ', '');
+
     const clusterNodes = (telemetry?.nodes || [])
-      .filter(node => node.clusterName === cluster.name)
+      .filter(node => node.clusterName === clusterLetter)
       .map(node => {
         // Parse temperature - remove °C and convert to number
         const tempStr = node.temperature?.toString() || '0';
@@ -331,11 +334,11 @@ function App() {
         
         return {
           id: node.label,
-          gpu: node.gpuLoad,
+          gpu: node.gpuLoad || 0,
           temp: tempValue,
-          cooling: cluster.cooling,
-          power: cluster.power / (telemetry?.nodes.filter(n => n.clusterName === cluster.name).length || 1),
-          status: (node.state === 'idle' ? 'idle' : node.state === 'hot' ? 'active' : 'active') as 'active' | 'idle' | 'offline'
+          cooling: node.cooling || 0,  // Use node's individual cooling, not cluster average
+          power: node.powerUsage || 0,  // Use node's individual power, not calculated
+          status: (node.status === 'offline' ? 'offline' : node.state === 'idle' ? 'idle' : 'active') as 'active' | 'idle' | 'offline'
         };
       });
 
@@ -393,7 +396,7 @@ function App() {
       </main>
       
       {/* AI Assistant */}
-      <AIAssistant ws={ws} connectionStatus={status} />
+  <AIAssistant wsRef={wsRef} connectionStatus={status} />
     </div>
   );
 }

@@ -32,6 +32,8 @@ type Node = {
   state: 'active' | 'hot' | 'idle';
   gpuLoad: number;
   temperature: string;
+  cooling: number;
+  powerUsage: number;
   status: string;
 };
 
@@ -126,5 +128,6 @@ export function useTelemetry(wsUrl: string) {
     };
   }, [wsUrl]);
 
-  return { telemetry, status, ws: wsRef.current };
+  // Return the ref object so consumers can always access the current WebSocket instance
+  return { telemetry, status, wsRef };
 }

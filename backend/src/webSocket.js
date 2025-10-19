@@ -3,6 +3,8 @@ import { generateTelemetry } from "./simulator.js";
 import { getClusterState, simulateLoadSpike } from "./stateMachine.js";
 import { appendLog } from "./utils/logger.js";
 import { analyzeClusterData, textToSpeech, askQuestion } from "./aiAssistant.js";
+import { muteAssistant, unmuteAssistant, getMuteState } from "./aiAssistant.js";
+
 
 // 📊 Transform backend cluster data to frontend Cluster format
 function transformClustersForFrontend(clusters) {
@@ -47,7 +49,7 @@ function transformClustersForFrontend(clusters) {
       status: status,
       gpu: cluster.gpuLoad,
       cooling: cluster.cooling,
-      power: cluster.powerUsage
+      power: parseFloat(cluster.powerUsage.toFixed(2))
     };
   });
 }
@@ -83,6 +85,8 @@ function generateNodes(clusters) {
         state: state,
         gpuLoad: node.gpuLoad,
         temperature: node.temperature.toFixed(1),
+        cooling: node.cooling,  // Include cooling data
+        powerUsage: node.powerUsage,  // Include power usage data
         status: node.status
       });
     });
@@ -211,6 +215,25 @@ export function startTelemetry(wss) {
     ws.on("message", async (msg) => {
       try {
         const data = JSON.parse(msg);
+
+        // 🟡 MUTE / UNMUTE CONTROL
+        if (data.type === "mute") {
+          muteAssistant();
+          broadcastMuteState();
+          return;
+        }
+
+        if (data.type === "unmute") {
+          unmuteAssistant();
+          broadcastMuteState();
+          return;
+        }
+
+        if (data.type === "get-mute-state") {
+          ws.send(JSON.stringify({ type: "mute-state", muted: getMuteState() }));
+          return;
+        }
+
         
         if (data.type === "ping") {
           ws.send(
@@ -300,3 +323,10 @@ export function startTelemetry(wss) {
     });
   });
 }
+function broadcastMuteState() {
+  const stateMsg = JSON.stringify({ type: "mute-state", muted: getMuteState() });
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(stateMsg);
+  });
+}
+
