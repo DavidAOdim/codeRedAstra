@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -12,10 +12,27 @@ import {
 } from 'chart.js';
 import { useTelemetry } from './hooks/useTelemetry';
 import { AIAssistant } from './components/AIAssistant';
+import { DataCenter3D } from './components/DataCenter3D';
 
 ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Tooltip, Legend, Filler);
 
 type Cluster = { name: string; status: 'active' | 'idle' | 'optimizing'; gpu: number; cooling: number; power: number };
+type NodeData = {
+  id: string;
+  gpu: number;
+  temp: number;
+  cooling: number;
+  power: number;
+  status: 'active' | 'idle' | 'offline';
+};
+type ClusterData = {
+  name: string;
+  status: 'active' | 'idle' | 'optimizing';
+  nodes: NodeData[];
+  gpu: number;
+  cooling: number;
+  power: number;
+};
 
 function Header({ connectionStatus }: { connectionStatus: string }) {
   const statusColors = {
@@ -191,7 +208,7 @@ function GPUGrid({ nodes }: { nodes: { id: number; label: string; clusterName: s
   );
 }
 
-function ClusterList({ clusters }: { clusters: Cluster[] }) {
+function ClusterList({ clusters, onClusterClick }: { clusters: Cluster[]; onClusterClick: (cluster: Cluster) => void }) {
   return (
     <div className="flex-1 overflow-y-auto pr-1.5 space-y-3">
       {clusters.map((cluster) => {
@@ -252,10 +269,18 @@ function ClusterList({ clusters }: { clusters: Cluster[] }) {
         }
         
         return (
-          <div key={cluster.name} className="bg-slate-900/50 rounded-lg border-l-4 border-cyan-400 p-4 hover:bg-slate-900/70 transition">
+          <div 
+            key={cluster.name} 
+            className="bg-slate-900/50 rounded-lg border-l-4 border-cyan-400 p-4 hover:bg-slate-900/70 transition cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+            onClick={() => onClusterClick(cluster)}
+            title="Click to view in 3D"
+          >
             <div className="flex items-center justify-between mb-3">
               <div className="flex-1">
-                <div className="font-semibold text-base">{cluster.name}</div>
+                <div className="font-semibold text-base flex items-center gap-2">
+                  {cluster.name}
+                  <span className="text-xs text-cyan-400/60">🎯 View 3D</span>
+                </div>
                 <div className="text-xs text-cyan-400 mt-0.5">{statusInfo.detail}</div>
               </div>
               <div className={`px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${statusInfo.color}`}>
@@ -290,6 +315,51 @@ function App() {
   const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080';
   const { telemetry, status, ws } = useTelemetry(WS_URL);
   const { data, options } = useChartData(telemetry?.chart);
+  const [selected3DClusterName, setSelected3DClusterName] = useState<string | null>(null);
+
+  // Convert cluster data to 3D format with node details (runs on every telemetry update)
+  const buildClusterData = (clusterName: string): ClusterData | null => {
+    const cluster = telemetry?.clusters.find(c => c.name === clusterName);
+    if (!cluster) return null;
+
+    const clusterNodes = (telemetry?.nodes || [])
+      .filter(node => node.clusterName === cluster.name)
+      .map(node => {
+        // Parse temperature - remove °C and convert to number
+        const tempStr = node.temperature?.toString() || '0';
+        const tempValue = parseFloat(tempStr.replace('°C', '').replace('°', '').trim()) || 0;
+        
+        return {
+          id: node.label,
+          gpu: node.gpuLoad,
+          temp: tempValue,
+          cooling: cluster.cooling,
+          power: cluster.power / (telemetry?.nodes.filter(n => n.clusterName === cluster.name).length || 1),
+          status: (node.state === 'idle' ? 'idle' : node.state === 'hot' ? 'active' : 'active') as 'active' | 'idle' | 'offline'
+        };
+      });
+
+    return {
+      name: cluster.name,
+      status: cluster.status,
+      nodes: clusterNodes,
+      gpu: cluster.gpu,
+      cooling: cluster.cooling,
+      power: cluster.power
+    };
+  };
+
+  const handleClusterClick = (cluster: Cluster) => {
+    setSelected3DClusterName(cluster.name);
+  };
+
+  // Build live cluster data whenever telemetry updates
+  const liveClusterData = selected3DClusterName ? buildClusterData(selected3DClusterName) : null;
+
+  // If 3D view is active, show it fullscreen with live data
+  if (selected3DClusterName && liveClusterData) {
+    return <DataCenter3D cluster={liveClusterData} onClose={() => setSelected3DClusterName(null)} />;
+  }
 
   return (
     <div className="min-h-dvh">
@@ -315,8 +385,9 @@ function App() {
           <div className="tm-panel">
             <div className="tm-divider">
               <div className="text-lg font-semibold">🖥️ GPU Clusters</div>
+              <div className="text-xs text-cyan-400/60">Click any cluster for 3D view</div>
             </div>
-            <ClusterList clusters={telemetry?.clusters || []} />
+            <ClusterList clusters={telemetry?.clusters || []} onClusterClick={handleClusterClick} />
           </div>
         </section>
       </main>

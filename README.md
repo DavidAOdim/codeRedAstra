@@ -2,18 +2,45 @@
 
 A real-time GPU cluster monitoring and optimization platform with integrated AI assistant.
 
+## 🚀 The Problem
+
+Modern AI data centers are the backbone of innovation — but also major energy consumers:
+
+- **GPUs burn massive amounts of power**, even when idle
+- **Cooling systems often overcompensate**, wasting additional electricity and water
+- **Inefficient workload scheduling** leads to 40%+ energy waste
+- **By 2030**, data centers could consume as much power as entire countries
+
+## 💡 The Solution
+
+ThermaMind introduces an **AI-driven orchestration layer** that continuously monitors and optimizes compute and cooling efficiency in real-time.
+
 ## Features
 
-### 🖥️ Real-Time Monitoring
+### 🖥️ Real-Time Telemetry Simulation
 - **32 GPU Nodes** organized into 4 physical clusters (A, B, C, D)
 - **Live WebSocket** connection updating every 2 seconds
 - **Heatmap visualization** showing GPU load, temperature, and cooling efficiency
 - **Time-series charts** tracking energy usage, cooling efficiency, and workload distribution
+- **Generates synthetic data** for GPU load, temperature, and cooling metrics across all clusters
 
-### 🧊 Intelligent Cooling System
+### 🧊 AI-Based Optimization Logic
 - **AI-optimized cooling**: 70% of nodes use predictive cooling (GPU load + 5%)
 - **Legacy systems**: 30% of nodes still catching up from over-cooling issues
 - **Dynamic status indicators**: Active, Idle, or Optimizing based on real metrics
+- **Predictive node management**: Automatically determines when to power down idle nodes and adjust cooling dynamically
+
+### 📊 Sustainability Dashboard
+- **Real-time metrics visualization**: Energy savings, CO₂ offset, power usage
+- **PUE (Power Usage Effectiveness)** tracking for efficiency monitoring
+- **Live performance indicators** showing the environmental impact of optimization decisions
+- **Actionable insights** for reducing data center carbon footprint
+
+### 📁 Data Logging & Analytics
+- **Continuous telemetry streams** stored in JSONL format (`data_logs/telemetry_log.jsonl`)
+- **Ready for future analysis** or ML model fine-tuning
+- **Compact data summaries**: Aggregates raw telemetry into hourly insights
+- **Context-efficient logs** optimized for LLM prompts and downstream processing
 
 ### 🤖 AI Assistant (Gemini + ElevenLabs)
 - **Real-time analysis**: Ask the AI to analyze current cluster status
