@@ -1,0 +1,8 @@
+# Ignore telemetry logs
+backend/data_logs/telemetry_log.jsonl
+
+# Ignore all .env files (any type, anywhere)
+.env
+.env.*
+**/.env
+**/.env.*

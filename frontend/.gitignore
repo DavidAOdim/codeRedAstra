@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+backend/data_logs/telemetry_log.jsonl
+.env
+.env.local
+*.env.*.local
