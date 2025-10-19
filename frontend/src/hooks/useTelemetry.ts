@@ -126,5 +126,6 @@ export function useTelemetry(wsUrl: string) {
     };
   }, [wsUrl]);
 
-  return { telemetry, status, ws: wsRef.current };
+  // Return the ref object so consumers can always access the current WebSocket instance
+  return { telemetry, status, wsRef };
 }

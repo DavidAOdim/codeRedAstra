@@ -288,7 +288,7 @@ function ClusterList({ clusters }: { clusters: Cluster[] }) {
 
 function App() {
   const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080';
-  const { telemetry, status, ws } = useTelemetry(WS_URL);
+  const { telemetry, status, wsRef } = useTelemetry(WS_URL);
   const { data, options } = useChartData(telemetry?.chart);
 
   return (
@@ -322,7 +322,7 @@ function App() {
       </main>
       
       {/* AI Assistant */}
-      <AIAssistant ws={ws} connectionStatus={status} />
+  <AIAssistant wsRef={wsRef} connectionStatus={status} />
     </div>
   );
 }
