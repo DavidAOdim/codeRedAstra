@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import ClusterMap from './components/ClusterMap';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -16,7 +17,19 @@ import { DataCenter3D } from './components/DataCenter3D';
 
 ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Tooltip, Legend, Filler);
 
-type Cluster = { name: string; status: 'active' | 'idle' | 'optimizing'; gpu: number; cooling: number; power: number };
+// Cluster type with geographic data
+type Cluster = { 
+  name: string; 
+  status: 'active' | 'idle' | 'optimizing'; 
+  gpu: number; 
+  cooling: number; 
+  power: number;
+  site?: string;
+  dataCenter?: string;
+  lat?: number;
+  lng?: number;
+  spikeActive?: boolean;
+};
 type NodeData = {
   id: string;
   gpu: number;
@@ -32,6 +45,7 @@ type ClusterData = {
   gpu: number;
   cooling: number;
   power: number;
+  site?: string;
 };
 
 function Header({ connectionStatus }: { connectionStatus: string }) {
@@ -89,7 +103,7 @@ function HeroStats({ stats }: { stats: { energySavings: number; co2OffsetKg: num
         <div className="text-4xl font-bold text-cyan-400">
           {powerDraw.toFixed(2)}<span className="text-lg"> MW</span>
         </div>
-        <div className="text-slate-400 text-xs mt-2">Across all 4 clusters</div>
+        <div className="text-slate-400 text-xs mt-2">Global operations</div>
       </div>
       <div className={card}>
         <div className="uppercase tracking-wider text-slate-400 text-xs">Cooling Efficiency (PUE)</div>
@@ -164,11 +178,24 @@ function GPUGrid({ nodes }: { nodes: { id: number; label: string; clusterName: s
     return groups;
   }, [nodes]);
 
+  // Get unique cluster names sorted alphabetically
+  const clusterNames = useMemo(() => {
+    return Object.keys(groupedNodes).sort();
+  }, [groupedNodes]);
+
+  // Calculate dynamic grid columns based on cluster count
+  const gridColsClass = useMemo(() => {
+    const count = clusterNames.length;
+    if (count <= 4) return 'grid-cols-4';
+    if (count <= 6) return 'grid-cols-6';
+    return 'grid-cols-4'; // 8 clusters = 4 cols x 2 rows
+  }, [clusterNames.length]);
+
   return (
     <div className="mt-6">
       {/* Grid with visual cluster grouping */}
-      <div className="grid grid-cols-4 gap-3">
-        {['A', 'B', 'C', 'D'].map(clusterName => (
+      <div className={`grid ${gridColsClass} gap-3`}>
+        {clusterNames.map(clusterName => (
           <div key={clusterName} className="space-y-2">
             <div className="text-xs font-semibold text-cyan-400 text-center">Cluster {clusterName}</div>
             <div className="grid grid-cols-4 gap-1.5 p-2 bg-slate-900/30 rounded-lg border border-cyan-400/20">
@@ -210,11 +237,18 @@ function GPUGrid({ nodes }: { nodes: { id: number; label: string; clusterName: s
 
 function ClusterList({ clusters, onClusterClick }: { clusters: Cluster[]; onClusterClick: (cluster: Cluster) => void }) {
   return (
-    <div className="flex-1 overflow-y-auto pr-1.5 space-y-3 pb-2">
+    <div className="cluster-list-scroll flex-1 overflow-y-auto pr-1.5 space-y-3 pb-2" style={{ maxHeight: 'calc(300px + 450px)' }}>
       {clusters.map((cluster) => {
         const gpuLoad = Math.round(cluster.gpu);
         const cooling = Math.round(cluster.cooling);
         const coolingDiff = cooling - gpuLoad;
+        
+        // Extract cluster letter from name (e.g., "Cluster A" -> "A")
+        const clusterLetter = cluster.name?.replace('Cluster ', '') || '';
+        // Build display name: "Houston, USA Cluster (A)"
+        const displayName = cluster.site 
+          ? `${cluster.site} Cluster (${clusterLetter})`
+          : cluster.name;
         
         // Generate dynamic status info based on ACTUAL data
         let statusInfo;
@@ -278,7 +312,7 @@ function ClusterList({ clusters, onClusterClick }: { clusters: Cluster[]; onClus
             <div className="flex items-center justify-between mb-3">
               <div className="flex-1">
                 <div className="font-semibold text-base flex items-center gap-2">
-                  {cluster.name}
+                  {displayName}
                   <span className="text-xs text-cyan-400/60">🎯 View 3D</span>
                 </div>
                 <div className="text-xs text-cyan-400 mt-0.5">{statusInfo.detail}</div>
@@ -348,13 +382,17 @@ function App() {
       nodes: clusterNodes,
       gpu: cluster.gpu,
       cooling: cluster.cooling,
-      power: cluster.power
+      power: cluster.power,
+      site: (cluster as any).site
     };
   };
 
   const handleClusterClick = (cluster: Cluster) => {
     setSelected3DClusterName(cluster.name);
   };
+
+  // Map view state
+  const [showMap, setShowMap] = useState(false);
 
   // Build live cluster data whenever telemetry updates
   const liveClusterData = selected3DClusterName ? buildClusterData(selected3DClusterName) : null;
@@ -367,8 +405,9 @@ function App() {
   return (
     <div className="min-h-dvh">
       <Header connectionStatus={status} />
-      <main className="max-w-[1400px] mx-auto p-6">
+      <main className="max-w-[1600px] mx-auto p-6">
         <HeroStats stats={telemetry?.stats || null} />
+
 
         <section className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 mb-6">
           <div className="tm-panel">
@@ -378,19 +417,35 @@ function App() {
             <div className="relative h-[300px]">
               <Line data={data} options={options} />
             </div>
-            <div className="mt-6 pt-6 border-t border-cyan-400/20">
+            <div className="mt-6 pt-6 border-t border-cyan-400/20 mb-14">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold">🖥️ GPU Cluster Status (32 Nodes)</h3>
+                <h3 className="text-base font-semibold">
+                  🖥️ GPU Cluster Status ({telemetry?.nodes?.length || 0} Nodes)
+                </h3>
               </div>
               <GPUGrid nodes={telemetry?.nodes || []} />
             </div>
           </div>
           <div className="tm-panel">
-            <div className="tm-divider">
-              <div className="text-lg font-semibold">🖥️ GPU Clusters</div>
-              <div className="text-xs text-cyan-400/60">Click any cluster for 3D view</div>
+            <div className="tm-divider flex items-center justify-between">
+              <div className="text-lg font-semibold flex items-center gap-2">
+                🖥️ GPU Clusters
+              </div>
+              <button
+                onClick={() => setShowMap(!showMap)}
+                className="text-cyan-400 hover:text-emerald-400 text-sm font-medium transition"
+              >
+                {showMap ? '📊 View List' : '🌎 View Map'} ↗
+              </button>
             </div>
-            <ClusterList clusters={telemetry?.clusters || []} onClusterClick={handleClusterClick} />
+            
+            {showMap ? (
+              <div className="flex-1 overflow-hidden">
+                <ClusterMap clusters={(telemetry?.clusters || []) as any} />
+              </div>
+            ) : (
+              <ClusterList clusters={telemetry?.clusters || []} onClusterClick={handleClusterClick} />
+            )}
           </div>
         </section>
       </main>

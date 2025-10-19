@@ -49,7 +49,13 @@ function transformClustersForFrontend(clusters) {
       status: status,
       gpu: cluster.gpuLoad,
       cooling: cluster.cooling,
-      power: parseFloat(cluster.powerUsage.toFixed(2))
+      power: parseFloat(cluster.powerUsage.toFixed(2)),
+      // 🌐 Geographic data
+      site: cluster.site,
+      dataCenter: cluster.dataCenter,
+      lat: cluster.lat,
+      lng: cluster.lng,
+      spikeActive: cluster.spikeActive
     };
   });
 }

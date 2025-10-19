@@ -19,6 +19,7 @@ type ClusterData = {
   gpu: number;
   cooling: number;
   power: number;
+  site?: string;
 };
 
 interface DataCenter3DProps {
@@ -936,9 +937,14 @@ export function DataCenter3D({ cluster, onClose }: DataCenter3DProps) {
           maxWidth: '320px',
         }}
       >
-        <h2 style={{ margin: '0 0 15px 0', color: '#00ffff', fontSize: '20px' }}>
+        <h2 style={{ margin: '0 0 5px 0', color: '#00ffff', fontSize: '20px' }}>
           🏢 {cluster.name}
         </h2>
+        {cluster.site && (
+          <div style={{ margin: '0 0 15px 0', color: '#888888', fontSize: '13px' }}>
+            📍 {cluster.site}
+          </div>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '14px' }}>
           <div>
             <div style={{ color: '#888888', fontSize: '11px', marginBottom: '4px' }}>AVG GPU</div>

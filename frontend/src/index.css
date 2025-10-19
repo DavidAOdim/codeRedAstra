@@ -142,6 +142,25 @@ body { color:#e0e6ed; -webkit-font-smoothing:antialiased; background: linear-gra
   background: rgba(0,212,255,.5);
 }
 
+/* Scrollbar styling for cluster list */
+.cluster-list-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cluster-list-scroll::-webkit-scrollbar-track {
+  background: rgba(255,255,255,.05);
+  border-radius: 3px;
+}
+
+.cluster-list-scroll::-webkit-scrollbar-thumb {
+  background: rgba(0,212,255,.3);
+  border-radius: 3px;
+}
+
+.cluster-list-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,212,255,.5);
+}
+
 /* Responsive adjustments */
 @media (max-width: 640px) {
   .tm-assistant-panel {
