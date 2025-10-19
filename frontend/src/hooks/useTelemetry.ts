@@ -28,7 +28,11 @@ type Cluster = {
 type Node = {
   id: number;
   label: string;
+  clusterName: string;
   state: 'active' | 'hot' | 'idle';
+  gpuLoad: number;
+  temperature: string;
+  status: string;
 };
 
 type TelemetrySnapshot = {
@@ -122,5 +126,5 @@ export function useTelemetry(wsUrl: string) {
     };
   }, [wsUrl]);
 
-  return { telemetry, status };
+  return { telemetry, status, ws: wsRef.current };
 }
